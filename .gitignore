@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE
+.idea/
+
+# pytest
+.pytest_cache/
+
+# 项目运行时生成（不提交）
+testcases/features/.generated/
+reports/
+screenshots/
+
+# 系统
+.DS_Store
+Thumbs.db
