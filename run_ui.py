@@ -4,12 +4,12 @@
     python run_ui.py
 
 依赖:
-    - Tkinter（Python 内置，Win/Mac 无需安装）
-    - hypium, pytest-bdd（已在 requirements 中）
+    - customtkinter
+    - hypium, pytest-bdd
 """
 
 import sys
-import tkinter as tk
+import customtkinter as ctk
 from pathlib import Path
 
 # 确保项目根目录在 sys.path 中
@@ -21,7 +21,10 @@ from ui.main_window import MainWindow
 
 
 def main():
-    root = tk.Tk()
+    ctk.set_appearance_mode("System")
+    ctk.set_default_color_theme("blue")
+
+    root = ctk.CTk()
     app = MainWindow(root)
     root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()

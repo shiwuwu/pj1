@@ -67,8 +67,8 @@ class TestRunner(threading.Thread):
             "--self-contained-html",
         ]
         if self._features:
-            for f in self._features:
-                args.extend(["-k", f])
+            k_expr = " or ".join(self._features)
+            args.extend(["-k", k_expr])
 
         try:
             self._process = subprocess.Popen(
@@ -126,13 +126,16 @@ class TestRunner(threading.Thread):
 
 
 def discover_features(lang: str = "all") -> list[dict]:
-    """扫描 features/{zh_CN,zh_TW,en} 目录，可按语言过滤。"""
+    """扫描 features/.generated/{zh_CN,zh_TW,en} 目录，可按语言过滤。"""
     import os
     lang_filter = lang if lang != "all" else os.environ.get("TEST_LANG", "all")
     features_root = PROJECT_ROOT / "testcases" / "features"
+    generated_root = features_root / ".generated"
     results = []
 
-    for lang_dir in sorted(features_root.iterdir()):
+    scan_root = generated_root if generated_root.exists() else features_root
+
+    for lang_dir in sorted(scan_root.iterdir()):
         if not lang_dir.is_dir():
             continue
         lang = lang_dir.name
