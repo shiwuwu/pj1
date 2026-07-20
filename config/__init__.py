@@ -1,0 +1,3 @@
+"""配置模块。"""
+
+from config.settings import LogSettings, settings

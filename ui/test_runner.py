@@ -1,5 +1,6 @@
 """后台线程执行 pytest-bdd 测试，实时捕获输出，运行结束后生成 HTML 报告。"""
 
+import os
 import queue
 import re
 import subprocess
@@ -31,6 +32,7 @@ class TestRunner(threading.Thread):
         self._start_time: float = 0
         self._pytest_html_path: str = ""
         self._custom_html_path: str = ""
+        self._log_file_path: str = ""
 
     @property
     def output_queue(self) -> queue.Queue:
@@ -56,11 +58,22 @@ class TestRunner(threading.Thread):
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self._pytest_html_path = str(REPORT_DIR / f"pytest_report_{ts}.html")
+        self._log_file_path = str(REPORT_DIR / f"test_log_{ts}.log")
+
+        # 激活文件日志
+        from utils.logger import enable_file_log
+        enable_file_log(self._log_file_path)
+        self._queue.put(("output", f"\n[日志文件] {self._log_file_path}"))
+
+        # 通过环境变量将日志文件路径传递给子进程
+        env = os.environ.copy()
+        env["HARMONY_LOG_FILE"] = self._log_file_path
 
         args = [
             sys.executable, "-m", "pytest",
             str(PROJECT_ROOT / "testcases"),
             "-v",
+            "-s",
             "--tb=short",
             "--color=no",
             f"--html={self._pytest_html_path}",
@@ -74,6 +87,7 @@ class TestRunner(threading.Thread):
             self._process = subprocess.Popen(
                 args,
                 cwd=str(PROJECT_ROOT),
+                env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -97,6 +111,8 @@ class TestRunner(threading.Thread):
             self._queue.put(("done", None))
         finally:
             self._running = False
+            from utils.logger import disable_file_log
+            disable_file_log()
 
     def _generate_custom_report(self):
         """调用 utils.report 生成自定义 HTML 报告。"""
