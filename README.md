@@ -11,44 +11,64 @@ pj/
 │   ├── config.py                       # 环境变量驱动的配置常量
 │   └── driver_manager.py              # UiDriver 单例管理器（connect/close）
 │
+├── config/                              # 配置模块
+│   ├── __init__.py
+│   └── settings.py                     # 日志抓取、输出路径等默认设置
+│
 ├── utils/                              # 工具文件夹 —— 可复用的测试辅助工具
 │   ├── __init__.py
-│   ├── logger.py                       # 统一日志输出
+│   ├── logger.py                       # 统一日志（控制台 + 运行时写入 reports/）
 │   ├── screenshot.py                   # 截图保存 & 失败自动截图
 │   ├── device_utils.py                 # 设备状态检查、应用管理
-│   └── component.py                    # 组件查找/操作的高级封装
+│   ├── component.py                    # 组件查找/操作的高级封装
+│   └── report.py                       # 自定义 HTML Summary 报告
+│
+├── tools/                              # 工具模块
+│   ├── __init__.py
+│   └── harmony_log.py                 # 鸿蒙设备日志抓取工具（hdc hilog）
 │
 ├── actions/                            # 业务动作封装层 —— 可复用的业务方法
 │   ├── __init__.py
-│   ├── app.py                          # 应用操作: 启动/停止/重启/回桌面
-│   ├── navigation.py                   # 导航操作: 跳转/Tab切换/返回/等待
-│   ├── search.py                       # 搜索操作: 输入/提交/清空历史
-│   ├── gesture.py                      # 手势操作: 滑动/双击/返回手势/点击
-│   └── verify.py                       # 验证操作: 组件/Toast/截图/状态
+│   ├── app.py                          # 应用操作: launch / go_home / ensure_ready
+│   ├── navigation.py                   # 导航操作: navigate / go_back / wait
+│   ├── search.py                       # 搜索操作: search / input / submit / clear
+│   ├── gesture.py                      # 手势操作: swipe / double_tap / press_key
+│   └── verify.py                       # 验证操作: component / toast / screenshot
 │
-├── testcases/                          # 用例文件夹 —— 所有测试内容
+├── testcases/                          # 用例文件夹
 │   ├── __init__.py
-│   ├── features/                       # Gherkin 场景描述（按模块拆分）
-│   │   ├── __init__.py
+│   ├── features/                       # Gherkin 模板（@key("arg") 语法）
 │   │   ├── app_launch.feature          # 应用启动与首页验证（2 个场景）
 │   │   ├── navigation.feature          # 页面导航与跳转（3 个场景）
 │   │   ├── search.feature              # 搜索功能（2 个场景）
-│   │   └── gesture.feature             # 手势与滑动操作（3 个场景）
+│   │   ├── gesture.feature             # 手势与滑动操作（3 个场景）
+│   │   └── .generated/                 # 自动生成的多语言 feature 文件（不提交 git）
+│   │       ├── zh_CN/
+│   │       ├── zh_TW/
+│   │       └── en/
 │   └── steps/                          # 步骤定义（Step Definitions）
 │       ├── __init__.py
 │       ├── conftest.py                 # Fixture 工厂 + pytest-bdd 钩子
-│       ├── test_app_launch.py          # 启动相关步骤
-│       ├── test_navigation.py          # 导航相关步骤
-│       ├── test_search.py             # 搜索相关步骤
-│       └── test_gesture.py            # 手势相关步骤
+│       ├── step_patterns.py            # 多语言模板引擎 + all_of() 解析器
+│       ├── test_app_launch.py
+│       ├── test_navigation.py
+│       ├── test_search.py
+│       └── test_gesture.py
 │
-├── ui/                                 # 可视化界面（Tkinter, Win/Mac 通用）
+├── locales/                            # 国际化翻译
+│   ├── zh_CN.json                      # 简体中文
+│   ├── zh_TW.json                      # 繁体中文
+│   └── en.json                         # 英语
+│
+├── ui/                                 # 可视化界面（customtkinter）
 │   ├── __init__.py
-│   ├── main_window.py                  # 主窗口 —— 设备/用例树/控制/日志
+│   ├── main_window.py                  # 主窗口 —— 设备/用例列表/控制/日志
 │   └── test_runner.py                  # 后台线程执行 pytest + 实时输出
 │
 ├── run_ui.py                           # GUI 启动入口
-├── screenshots/                        # 截图输出目录（自动创建）
+├── reports/                            # 测试报告 + 运行日志（自动生成）
+├── logs/                               # 鸿蒙设备日志抓取输出（自动生成）
+├── screenshots/                        # 截图输出目录（自动生成）
 ├── pytest.ini
 └── README.md
 ```
@@ -57,22 +77,23 @@ pj/
 
 ```
                          ┌──────────────────────────────────┐
-                         │        testcases/features/        │  ← 业务场景（Gherkin）
-                         │  app_launch / navigation /        │
-                         │  search / gesture .feature        │
+                         │    testcases/features/*.feature   │  ← 业务场景（模板，@key 语法）
+                         │    locales/*.json （翻译）         │
+                         │         ↓ generate_features()     │
+                         │    .generated/{lang}/*.feature     │  ← 运行时加载
                          └──────────────┬───────────────────┘
                                         │ scenarios() 注册
                                         ▼
                          ┌──────────────────────────────────┐
                          │      testcases/steps/             │  ← 步骤映射层（薄层）
-                         │  test_*.py                        │     只做参数解析 + 调用 actions
-                         │  @given / @when / @then           │
+                         │  test_*.py                        │     @given / @when / @then
+                         │  step_patterns.py (all_of 多语言)  │
                          │  conftest.py (fixture 工厂)        │
                          └──────────────┬───────────────────┘
                                         │ 调用业务方法
                                         ▼
                          ┌──────────────────────────────────┐
-                         │        actions/                   │  ← 业务动作封装层 ★
+                         │        actions/                   │  ← 业务动作封装层
                          │  app / navigation /               │     把零散 hypium 调用
                          │  search / gesture / verify        │     组合为可复用业务方法
                          └──────┬───────────────┬───────────┘
@@ -99,47 +120,47 @@ pj/
 
 | 层级 | 目录 | 职责 | 依赖方向 |
 |------|------|------|----------|
-| **场景层** | `testcases/features/` | Gherkin 自然语言描述测试意图 | 无依赖 |
+| **场景层** | `testcases/features/` | Gherkin 模板 + 多语言翻译 | → locales |
 | **步骤层** | `testcases/steps/` | 解析 Gherkin 参数，转调 actions 方法 | → actions |
-| **动作层** ★ | `actions/` | 把 hypium 零散调用组合为业务方法，可被多个 step 复用 | → common, utils |
+| **动作层** | `actions/` | 把 hypium 零散调用组合为业务方法 | → common, utils |
 | **工具层** | `utils/` | 可复用的测试辅助（组件封装、截图、日志、设备检查） | → hypium |
 | **公共层** | `common/` | Driver 生命周期管理、全局配置常量 | → hypium |
 
-### actions 层方法一览
+## 多语言支持
 
-| 模块 | 方法 | 说明 |
-|------|------|------|
-| `app` | `launch_app` / `restart_app` / `stop_app` / `go_to_home` / `ensure_app_ready` | 应用生命周期管理 |
-| `navigation` | `navigate_to_page` / `switch_tab` / `go_back` / `wait_for_page` | 页面跳转与等待 |
-| `search` | `perform_search` / `open_search` / `input_search_keyword` / `submit_search` / `clear_search_history` | 完整搜索流程 |
-| `gesture` | `swipe_on_list` / `double_tap_component` / `perform_back_gesture` / `tap_component_by_id` / `swipe_up/down_on_component` | 手势操作 |
-| `verify` | `verify_component_text/id` / `verify_page_contains` / `verify_toast_message` / `verify_app_launched` / `verify_search_not_empty` / `take_screenshot` | 断言验证 |
+Feature 文件使用 `@key("arg")` 模板语法，通过 `step_patterns.py` 渲染为具体语言的 `.feature` 文件：
 
-### HTML 报告
-
-框架支持两种 HTML 报告输出：
-
-| 报告类型 | 生成方式 | 说明 |
-|----------|----------|------|
-| **pytest-html 标准报告** | 自动生成（GUI / CLI `--html`） | pytest 官方报告插件 |
-| **自定义 Summary 报告** | `utils/report.py` → `generate_summary_report()` | 独立的、美观的汇总报告 |
-
-**CLI 运行并生成报告：**
-
-```bash
-pytest testcases/ --html=reports/report.html --self-contained-html
+```
+testcases/features/app_launch.feature  (模板)
+    @launch_app("com.example.app")
+         ↓ generate_features("en")
+    When launch application "com.example.app"   (.generated/en/)
+         ↓ generate_features("zh_CN")  
+    When 启动应用 "com.example.app"              (.generated/zh_CN/)
 ```
 
-**GUI 运行：**
-- 点击 "运行全部" / "运行选中" → 自动生成两种报告到 `reports/` 目录
-- 测试完成后 "📊 查看报告" 按钮自动启用
-- 点击可在浏览器中查看报告
+23 个公共步骤定义在所有三种语言中共享，通过 `all_of("key")` 自动匹配。
 
-报告包含：
-- 总计/通过/失败/通过率 统计卡片
-- Feature → Scenario 明细表格
-- 失败项错误信息
-- 进度条可视化
+## 日志
+
+| 场景 | 控制台 | 文件 | 位置 |
+|---|---|---|---|
+| UI 空闲时 | ✓ | ✗ | — |
+| 运行测试时 | ✓ | ✓ | `reports/test_log_<时间戳>.log` |
+| 测试结束后 | ✓ | ✗ | — |
+
+日志文件与 HTML 报告放在同一个 `reports/` 目录下。
+
+## 鸿蒙设备日志抓取
+
+```python
+from tools import HarmonyLogCapture
+
+cap = HarmonyLogCapture(device_sn="xxx")
+cap.save_to_file("crash.log", duration=5, level="E")   # 抓 5 秒 Error 日志
+cap.stream(callback=lambda line: print(line))            # 实时抓取
+cap.stop()
+```
 
 ## 依赖
 
@@ -148,18 +169,17 @@ pytest testcases/ --html=reports/report.html --self-contained-html
 | `hypium` | 6.1.0.210 | HarmonyOS UI 自动化驱动 |
 | `pytest-bdd` | 8.1.0 | Gherkin BDD 测试框架 |
 | `pytest` | — | 测试运行器 |
+| `customtkinter` | ≥6.0 | GUI 界面 |
 
 安装：
 
 ```bash
-pip install hypium pytest-bdd
+pip install hypium pytest-bdd customtkinter
 ```
 
 ## 快速开始
 
 ### 1. 连接设备
-
-确保 HarmonyOS/OpenHarmony 设备通过 USB 连接，且 hdc 可用：
 
 ```bash
 hdc list targets
@@ -167,175 +187,112 @@ hdc list targets
 
 ### 2. 运行测试
 
-#### 命令行方式
+#### 命令行
 
 ```bash
-# 运行全部 BDD 测试
-pytest testcases/
-
-# 指定设备 SN
-HARMONY_DEVICE_SN=ABC123 pytest testcases/
-
-# 运行特定 feature（按文件名过滤）
-pytest testcases/ -k "navigation"
-
-# 运行特定场景（按场景名过滤）
-pytest testcases/ -k "Toast 消息验证"
-
-# 详细输出 + 不截断
+# 全部测试
 pytest testcases/ -v -s
+
+# 指定语言
+TEST_LANG=zh_CN pytest testcases/ -v -s
+
+# 指定设备
+HARMONY_DEVICE_SN=ABC123 pytest testcases/
 ```
 
-#### 可视化界面方式（推荐）
+#### 可视化界面（推荐）
 
 ```bash
 python run_ui.py
 ```
 
-GUI 功能：
-
-```
-┌──────────────────────────────────────────────┐
-│  HarmonyOS UI Test Runner                    │
-├──────────────┬───────────────────────────────┤
-│ 设备连接      │  输出日志                      │
-│  SN: [____]  │  ┌───────────────────────────┐│
-│  [连接]       │  │ test session starts       ││
-│ 状态: 已连接  │  │ PASSED test_xxx           ││
-│              │  │                           ││
-│ 测试用例      │  │                           ││
-│  ▼ 应用启动   │  └───────────────────────────┘│
-│    - 冷启动   │                               │
-│    - 后台恢复 │                               │
-│  ▼ 页面导航   │                               │
-│    - Tab 切换 │                               │
-│    - 返回操作 │                               │
-│              │                               │
-│ [▶ 运行全部]  │                               │
-│ [▶ 运行选中]  │                               │
-│ [■ 停止]      │                               │
-│ [==========] │                               │
-├──────────────┴───────────────────────────────┤
-│ 共 10 个测试 | 通过 8 | 失败 2                 │
-└──────────────────────────────────────────────┘
-```
-
-**GUI 特性：**
+**GUI 功能：**
 - 设备连接管理（输入 SN 一键连接）
-- Feature/Scenario 树形列表（自动从 `.feature` 文件扫描）
-- 运行全部 / 运行选中场景
+- 用例列表（Feature 级别，按语言过滤）
+- 运行全部 / 运行选中
 - 实时彩色日志输出（通过=绿色，失败=红色）
-- 场景执行结果图标（✓ / ✗）
+- 执行结果图标（✓ / ✗）
 - 测试统计（总数/通过/失败）
 - 手动停止测试
-- 零额外依赖（Win 和 Mac 内置 Tkinter）
-
-### 3. 跳过场景
-
-在 `.feature` 文件中对场景标记 `@skip`：
-
-```gherkin
-@skip
-Scenario: 这个场景会被跳过
-    ...
-```
+- 📊 一键查看 HTML 报告
 
 ## 添加新用例
 
-### 步骤 1：在 actions 层写好业务方法（可复用）
+使用 `/add-testcase` 技能快速添加，或按以下步骤手动操作：
 
-```python
-# actions/login.py —— 新增登录模块
-from hypium import UiDriver
-from utils.component import ComponentHelper
-from utils.logger import get_logger
+### 步骤 1：在 locales 中添加翻译
 
-logger = get_logger(__name__)
-
-
-def perform_login(driver: UiDriver, comp: ComponentHelper, username: str, password: str):
-    """完整的登录流程：点击登录入口 → 输入账号密码 → 提交。"""
-    logger.info(f"执行登录: user='{username}'")
-    comp.tap_id("login_btn")
-    comp.type_into("username", username)
-    comp.type_into("password", password)
-    comp.tap_id("submit")
+```json
+// locales/zh_CN.json
+{ "enter_username": "在 \"{input_id}\" 中输入用户名 \"{username}\"" }
+// locales/en.json
+{ "enter_username": "enter username \"{username}\" into \"{input_id}\"" }
 ```
 
-### 步骤 2：在 Gherkin 中组合已有步骤
+### 步骤 2：创建 Feature 模板
 
 ```gherkin
 # testcases/features/login.feature
 Feature: 用户登录
     Background:
-        Given 设备已连接且屏幕已解锁
-        And 目标应用 "com.example.app" 已安装
+        Given @device_ready
+        And @app_installed("com.example.app")
 
-    Scenario: 密码登录成功
-        When 启动应用 "com.example.app"
-        And 点击组件 id "login_btn"
-        And 在 id "username" 中输入文本 "admin"
-        And 在 id "password" 中输入文本 "123456"
-        And 点击组件 id "submit"
-        Then 验证组件存在 text "欢迎回来"
+    Scenario: 密码登录
+        When @launch_app("com.example.app")
+        And @enter_username("login_input", "admin")
+        And @click_id("submit_btn")
+        Then @verify_text("欢迎")
 ```
 
-### 步骤 3：仅需一行注册（已有步骤自动复用）
+### 步骤 3：创建 actions 业务方法
+
+```python
+# actions/login.py
+from utils.logger import get_logger
+logger = get_logger(__name__)
+
+def enter_username(driver, comp, input_id: str, username: str):
+    logger.info(f"输入用户名: {username}")
+    comp.type_into(input_id, username)
+```
+
+### 步骤 4：创建步骤定义
 
 ```python
 # testcases/steps/test_login.py
-from pathlib import Path
-from pytest_bdd import scenarios
+from pytest_bdd import when, scenarios
+from actions.login import enter_username
+from testcases.steps.step_patterns import all_of, GENERATED_DIR
 
-FEATURE_DIR = Path(__file__).resolve().parent.parent / "features"
-scenarios(str(FEATURE_DIR / "login.feature"))
+for lang_dir in GENERATED_DIR.iterdir() if GENERATED_DIR.exists() else []:
+    fp = lang_dir / "login.feature"
+    if fp.exists():
+        scenarios(str(fp))
+
+@when(*all_of("enter_username"))
+def step_enter_username(driver, comp, input_id: str, username: str):
+    enter_username(driver, comp, input_id, username)
 ```
 
-**关键设计**：step 文件只做参数映射 → actions 层写业务逻辑。同一个 action 方法可以被 Gherkin 中不同步骤组合出来的场景反复复用，不需要重复写代码。
+### 步骤 5：注册并生成
 
-## Hypium 常用 API 速查
+在 `actions/__init__.py` 中添加导出，然后运行：
 
-### UiDriver — 设备操作
-
-| 方法 | 说明 |
-|------|------|
-| `driver.connect(sn)` | 连接指定设备 |
-| `driver.start_app(id)` | 启动应用 |
-| `driver.stop_app(id)` | 停止应用 |
-| `driver.go_back()` | 返回 |
-| `driver.go_home()` | 回桌面 |
-| `driver.press_key(code)` | 按键 |
-| `driver.swipe(dir)` | 滑动 |
-| `driver.take_screenshot(path)` | 截图 |
-| `driver.get_latest_toast()` | 获取最新 Toast |
-| `driver.unlock()` | 解锁 |
-
-### BY — 组件选择器
-
-| 选择器 | 说明 |
-|--------|------|
-| `BY.text("首页")` | 按文本（默认 CONTAINS） |
-| `BY.text("首页", MatchPattern.EQUALS)` | 精确匹配 |
-| `BY.id("search_btn")` | 按 ID |
-| `BY.type("Button")` | 按类型 |
-| `BY.description("搜索")` | 按无障碍描述 |
-| `BY.xpath("//Button[@id='x']")` | XPath |
-
-### UiComponent — 组件操作
-
-| 方法 | 说明 |
-|------|------|
-| `comp.click()` / `doubleClick()` / `longClick()` | 点击/双击/长按 |
-| `comp.inputText(t)` / `clearText()` | 输入/清空 |
-| `comp.getText()` | 获取文本 |
-| `comp.swipe(dir)` | 组件内滑动 |
-| `comp.scrollToTop()` / `scrollToBottom()` | 滚动 |
+```python
+from testcases.steps.step_patterns import generate_features
+generate_features("zh_CN"); generate_features("en"); generate_features("zh_TW")
+```
 
 ## 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `HARMONY_DEVICE_SN` | 目标设备序列号 | 空（自动） |
+| `HARMONY_DEVICE_SN` | 目标设备序列号 | 空 |
 | `HARMONY_IMPLICIT_WAIT` | 隐式等待超时（秒） | 10 |
 | `HARMONY_ACTION_INTERVAL` | 操作间隔（秒） | 1.0 |
 | `HARMONY_SCREENSHOT_DIR` | 截图保存目录 | `./screenshots/` |
+| `HARMONY_LOG_DIR` | 日志目录 | `./logs/` |
+| `HARMONY_LOG_FILE` | 运行时日志文件路径 | 自动生成于 `reports/` |
+| `HDC_PATH` | hdc 可执行文件路径 | `hdc` |
+| `TEST_LANG` | 测试语言（zh_CN/zh_TW/en/all） | `zh_CN` |
