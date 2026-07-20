@@ -25,6 +25,7 @@ pj/
 │
 ├── tools/                              # 工具模块
 │   ├── __init__.py
+│   ├── hdc_utils.py                   # HDC 设备操作封装（安装/按键/截图/文件…）
 │   └── harmony_log.py                 # 鸿蒙设备日志抓取工具（hdc hilog）
 │
 ├── actions/                            # 业务动作封装层 —— 可复用的业务方法
@@ -151,13 +152,70 @@ testcases/features/app_launch.feature  (模板)
 
 日志文件与 HTML 报告放在同一个 `reports/` 目录下。
 
-## 鸿蒙设备日志抓取
+## HDC 工具集 (`tools/`)
+
+### HdcHelper — 设备操作
+
+```python
+from tools import HdcHelper
+
+hdc = HdcHelper(device_sn="xxx")
+
+# 设备管理
+hdc.list_devices()          # [{sn, status}]
+hdc.is_connected()           # 设备是否在线
+
+# 应用管理
+hdc.install("app.hap")       # 安装 HAP
+hdc.uninstall("com.xxx")     # 卸载
+hdc.start_app("com.xxx")     # 启动 Ability
+hdc.stop_app("com.xxx")      # 强制停止
+
+# 文件传输
+hdc.push("local.txt", "/data/local/tmp/remote.txt")
+hdc.pull("/data/local/tmp/log.txt", "./log.txt")
+
+# Shell
+hdc.shell_output("ls /data/local/tmp")
+
+# 设备信息
+hdc.get_screen_size()        # "1080x2340"
+hdc.get_android_version()    # "12"
+hdc.get_device_model()       # "Mate 60 Pro"
+hdc.list_packages("wechat")  # 过滤包名
+
+# 截图
+hdc.screenshot()             # 截图 → screenshot_<ts>.png
+
+# 按键
+hdc.press_home()             # Home
+hdc.press_back()             # 返回
+hdc.press_power()            # 电源
+hdc.press_volume_up()        # 音量+
+hdc.press_volume_down()      # 音量-
+hdc.press_enter()            # 回车
+hdc.press_menu()             # 菜单
+hdc.press_recent()           # 最近任务
+hdc.press_dpad_up()          # ↑
+hdc.press_dpad_down()        # ↓
+hdc.press_dpad_left()        # ←
+hdc.press_dpad_right()       # →
+hdc.press_dpad_center()      # 确认
+hdc.press_key(123)           # 自定义按键码
+
+# 系统
+hdc.reboot()                 # 重启
+```
+
+### HarmonyLogCapture — 日志抓取
 
 ```python
 from tools import HarmonyLogCapture
 
 cap = HarmonyLogCapture(device_sn="xxx")
-cap.save_to_file("crash.log", duration=5, level="E")   # 抓 5 秒 Error 日志
+cap.clear()                                              # 清空缓冲区
+cap.collect(duration=10, level="E")                      # 抓 10 秒 Error 日志
+cap.save_to_file("crash.log", duration=5, level="E")     # 保存到文件
 cap.stream(callback=lambda line: print(line))            # 实时抓取
 cap.stop()
 ```
